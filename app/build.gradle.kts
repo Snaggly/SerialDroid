@@ -7,6 +7,10 @@ android {
     namespace = "tech.snaggle.serialdroid"
     compileSdk = 34
 
+    buildFeatures {
+        viewBinding = true
+    }
+
     defaultConfig {
         applicationId = "tech.snaggle.serialdroid"
         minSdk = 23
