@@ -29,7 +29,6 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="Baudrate: "
-        android:visibility="invisible"
         app:layout_constraintBottom_toBottomOf="@+id/baudSpinner"
         app:layout_constraintEnd_toStartOf="@+id/baudSpinner"
         app:layout_constraintTop_toTopOf="@+id/baudSpinner" />
@@ -38,7 +37,6 @@
         android:id="@+id/baudSpinner"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:visibility="invisible"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintHorizontal_bias="1.0"
         app:layout_constraintStart_toStartOf="parent"

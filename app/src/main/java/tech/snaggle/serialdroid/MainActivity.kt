@@ -3,6 +3,7 @@ package tech.snaggle.serialdroid
 import android.os.Bundle
 import android.os.Handler
 import android.os.Message
+import android.serialport.SerialPort
 import android.view.View
 import android.widget.Adapter
 import android.widget.AdapterView
@@ -12,6 +13,7 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import tech.snaggle.serialdroid.databinding.ActivityMainBinding
 import java.io.File
+import java.io.InputStream
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
@@ -20,23 +22,52 @@ class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
     private lateinit var baudSpinnerAdapter: Adapter
     private lateinit var devSpinnerAdapter: Adapter
-    private var serialFile: File? = null
     private var readerExecutor: ExecutorService? = null
+    private var serialPort: SerialPort? = null
+    private var stream: InputStream? = null
+    private var devPath = ""
+    private var baudRate = 115200
 
     private val handlerCallback = Handler.Callback { msg: Message ->
-        if (msg.what != 1)
-            return@Callback false
-        binding.textView.text = StringBuilder(binding.textView.text).also {
-            it.append(" \t ")
-            it.append(msg.obj as String)
-        }.toString()
+        when (msg.what) {
+            1 -> {
+                binding.textView.text = StringBuilder(binding.textView.text).also {
+                    it.append(" \t ")
+                    it.append(msg.obj as String)
+                }.toString()
+            }
+
+            2 -> {
+                binding.baudSpinner.visibility = View.INVISIBLE
+                binding.baudTV.visibility = View.INVISIBLE
+            }
+
+            3 -> {
+                binding.baudSpinner.visibility = View.VISIBLE
+                binding.baudTV.visibility = View.VISIBLE
+            }
+
+            else -> {
+                return@Callback false
+            }
+        }
         return@Callback true
     }
 
     private val readerRun = Runnable {
         try {
-            serialFile = File(binding.devSpinner.selectedItem as String)
-            serialFile?.inputStream()?.let { file ->
+            binding.textView.text = ""
+
+            stream = try {
+                serialPort = SerialPort(devPath, baudRate)
+                handler.sendMessage(handler.obtainMessage(3))
+                serialPort!!.inputStream
+            } catch (link: UnsatisfiedLinkError) {
+                serialPort = null
+                handler.sendMessage(handler.obtainMessage(2))
+                File(devPath).inputStream()
+            }
+            stream?.let { file ->
                 while (!Thread.currentThread().isInterrupted) {
                     val buffer = ByteArray(128)
                     val readBytes = file.read(buffer)
@@ -48,6 +79,7 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         } catch (error: Exception) {
+            error.printStackTrace()
             runOnUiThread {
                 Toast.makeText(
                     this@MainActivity,
@@ -122,33 +154,70 @@ class MainActivity : AppCompatActivity() {
                 position: Int,
                 id: Long
             ) {
-                resumeReader()
+                val newSelection = binding.devSpinner.selectedItem as String
+                if (devPath != newSelection) {
+                    devPath = newSelection
+                    resumeReader()
+                }
             }
 
             override fun onNothingSelected(parent: AdapterView<*>?) {
-                resumeReader()
+            }
+        }
+
+        binding.baudSpinner.onItemSelectedListener = object : OnItemSelectedListener {
+            override fun onItemSelected(
+                parent: AdapterView<*>?,
+                view: View?,
+                position: Int,
+                id: Long
+            ) {
+                val newSelection = binding.baudSpinner.selectedItem as Int
+                if (baudRate != newSelection) {
+                    baudRate = newSelection
+                    resumeReader()
+                }
             }
 
+            override fun onNothingSelected(parent: AdapterView<*>?) {
+            }
         }
     }
 
-    override fun onResume() {
-        super.onResume()
-        binding.textView.text = ""
-        resumeReader()
-    }
-
-    override fun onPause() {
-        super.onPause()
-
-        readerExecutor?.shutdownNow()
-        readerExecutor = null
+    override fun onStop() {
+        super.onStop()
+        stopReader()
     }
 
     private fun resumeReader() {
-        readerExecutor?.shutdownNow()
+        stopReader()
+        if (devPath.isEmpty()) {
+            return
+        }
         readerExecutor = Executors.newSingleThreadExecutor().also {
             it.execute(readerRun)
+        }
+    }
+
+    private fun stopReader() {
+        try {
+            stream?.close()
+        } catch (error: Exception) {
+            Toast.makeText(this, "Failed to close stream: ${error.message}", Toast.LENGTH_LONG)
+                .show()
+        }
+        try {
+            //serialPort?.close()
+        } catch (error: Exception) {
+            Toast.makeText(this, "Failed to close serial port: ${error.message}", Toast.LENGTH_LONG)
+                .show()
+        }
+        try {
+            readerExecutor?.shutdownNow()
+            readerExecutor = null
+        } catch (error: Exception) {
+            Toast.makeText(this, "Failed to shutdown executor: ${error.message}", Toast.LENGTH_LONG)
+                .show()
         }
     }
 }
